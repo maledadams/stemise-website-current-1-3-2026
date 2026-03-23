@@ -66,6 +66,11 @@ const rememberAdminReturnPath = (path: string) => {
   window.sessionStorage.setItem(ADMIN_RETURN_TO_KEY, path || "/");
 };
 
+export const clearStoredAdminSessionState = () => {
+  clearSessionStartedAt();
+  storeAdminBuildId(ADMIN_BUILD_ID);
+};
+
 export const AdminAuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -137,7 +142,7 @@ export const AdminAuthProvider = ({ children }: { children: React.ReactNode }) =
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
       if (event === "SIGNED_OUT") {
-        clearSessionStartedAt();
+        clearStoredAdminSessionState();
       }
 
       await syncSession(nextSession ?? null, event === "SIGNED_IN");

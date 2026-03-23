@@ -10,7 +10,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { useAdminAuth } from "@/components/AdminAuthProvider";
+import { clearStoredAdminSessionState, useAdminAuth } from "@/components/AdminAuthProvider";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import Seo from "@/components/Seo";
@@ -523,11 +523,22 @@ const Admin = () => {
 
   const handleSignOut = async () => {
     if (!supabase) return;
-    await supabase.auth.signOut();
-    toast({
-      title: "Signed out",
-      description: "Admin mode is locked again.",
-    });
+
+    try {
+      await supabase.auth.signOut();
+      clearStoredAdminSessionState();
+      toast({
+        title: "Signed out",
+        description: "Admin mode is locked again.",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Sign-out failed.";
+      toast({
+        title: "Could not sign out",
+        description: message,
+        variant: "destructive",
+      });
+    }
   };
 
   if (!isSupabaseConfigured || !supabase) {
@@ -636,7 +647,7 @@ const Admin = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button variant="outline" onClick={handleSignOut}>
+                <Button type="button" variant="outline" onClick={handleSignOut}>
                   <LogOut className="h-4 w-4" />
                   Sign out
                 </Button>
@@ -669,7 +680,7 @@ const Admin = () => {
                     content store used by the site.
                   </CardDescription>
                 </div>
-                <Button variant="outline" onClick={handleSignOut}>
+                <Button type="button" variant="outline" onClick={handleSignOut}>
                   <LogOut className="h-4 w-4" />
                   Sign out
                 </Button>
