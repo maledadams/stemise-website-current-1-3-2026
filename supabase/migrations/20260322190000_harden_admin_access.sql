@@ -10,12 +10,23 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, auth
 as $$
+  with current_email as (
+    select lower(
+      trim(
+        coalesce(
+          nullif(auth.jwt() ->> 'email', ''),
+          (select email from auth.users where id = auth.uid()),
+          ''
+        )
+      )
+    ) as email
+  )
   select exists (
     select 1
     from public.admin_allowlist
-    where email = lower(trim(coalesce(auth.jwt() ->> 'email', '')))
+    where lower(email) = (select email from current_email)
   );
 $$;
 
@@ -42,6 +53,7 @@ drop policy if exists "Admin allowlist upload site assets" on storage.objects;
 create policy "Admin allowlist upload site assets"
 on storage.objects
 for insert
+to authenticated
 with check (
   bucket_id = 'site-assets'
   and public.current_user_is_admin()
@@ -52,6 +64,7 @@ drop policy if exists "Admin allowlist update site assets" on storage.objects;
 create policy "Admin allowlist update site assets"
 on storage.objects
 for update
+to authenticated
 using (
   bucket_id = 'site-assets'
   and public.current_user_is_admin()
@@ -66,6 +79,7 @@ drop policy if exists "Admin allowlist delete site assets" on storage.objects;
 create policy "Admin allowlist delete site assets"
 on storage.objects
 for delete
+to authenticated
 using (
   bucket_id = 'site-assets'
   and public.current_user_is_admin()
