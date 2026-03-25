@@ -24,6 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import {
   fetchAllSiteContent,
+  saveAllSiteContent,
   saveSiteContent,
   siteContentLabels,
   uploadSiteAsset,
@@ -510,14 +511,13 @@ const Admin = () => {
       };
 
       setContent(nextContent);
+      const verifiedContent = await saveAllSiteContent(nextContent);
 
-      for (const key of sectionOrder) {
-        await saveSiteContent(key, nextContent[key]);
-      }
-
-      await queryClient.invalidateQueries({ queryKey: ["site-content"] });
-      const nextAllContent = await fetchAllSiteContent();
-      setContent(nextAllContent);
+      queryClient.setQueryData(["site-content", "all"], verifiedContent);
+      sectionOrder.forEach((key) => {
+        queryClient.setQueryData(["site-content", key], verifiedContent[key]);
+      });
+      setContent(verifiedContent);
 
       let redeployWarning: string | null = null;
 

@@ -534,6 +534,52 @@ export const fetchAllSiteContent = async (): Promise<SiteContentMap> => {
   return normalizeSiteContentState(data.payload);
 };
 
+const syncAllImageBackedContentToStorage = async (
+  payload: SiteContentMap,
+): Promise<SiteContentMap> => {
+  const nextPayload = cloneValue(payload);
+
+  nextPayload.home_events = await syncImageBackedContentToStorage("home_events", nextPayload.home_events);
+  nextPayload.kits = await syncImageBackedContentToStorage("kits", nextPayload.kits);
+  nextPayload.supporters = await syncImageBackedContentToStorage("supporters", nextPayload.supporters);
+  nextPayload.team_members = await syncImageBackedContentToStorage("team_members", nextPayload.team_members);
+  nextPayload.curriculum_pages = await syncImageBackedContentToStorage("curriculum_pages", nextPayload.curriculum_pages);
+
+  return nextPayload;
+};
+
+export const saveAllSiteContent = async (payload: SiteContentMap): Promise<SiteContentMap> => {
+  if (!supabase || !isSupabaseConfigured) {
+    throw new Error("Supabase is not configured.");
+  }
+
+  const nextPayload = await syncAllImageBackedContentToStorage(payload);
+
+  const { error } = await supabase.from("site_content_state").upsert(
+    {
+      id: SITE_CONTENT_ROW_ID,
+      payload: nextPayload,
+    },
+    { onConflict: "id" },
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  const verifiedState = await fetchSiteContentStateRow({ throwOnError: true });
+  const verifiedPayload = normalizeSiteContentState(verifiedState?.payload);
+
+  if (
+    stableSerializeForComparison(verifiedPayload) !==
+      stableSerializeForComparison(normalizeSiteContentState(nextPayload))
+  ) {
+    throw new Error("Content save could not be verified from Supabase.");
+  }
+
+  return verifiedPayload;
+};
+
 export const saveSiteContent = async <K extends SiteContentKey>(
   key: K,
   payload: SiteContentMap[K],
@@ -618,6 +664,9 @@ export const useSiteContentQuery = <K extends SiteContentKey>(key: K) =>
     queryKey: ["site-content", key],
     queryFn: () => fetchSiteContent(key),
     initialData: getFallbackSiteContent(key),
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
 export const useAllSiteContentQuery = () =>
@@ -625,4 +674,7 @@ export const useAllSiteContentQuery = () =>
     queryKey: ["site-content", "all"],
     queryFn: fetchAllSiteContent,
     initialData: cloneValue(fallbackSiteContent),
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });

@@ -16,6 +16,16 @@ const jsonResponse = (body: Record<string, unknown>, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+const getNoCacheDeployHookUrl = (deployHookUrl: string) => {
+  const url = new URL(deployHookUrl);
+
+  if (!url.searchParams.has("buildCache")) {
+    url.searchParams.set("buildCache", "false");
+  }
+
+  return url.toString();
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -62,7 +72,7 @@ serve(async (req) => {
     }
 
     const requestBody = await req.json().catch(() => ({}));
-    const deployResponse = await fetch(DEPLOY_HOOK_URL, {
+    const deployResponse = await fetch(getNoCacheDeployHookUrl(DEPLOY_HOOK_URL), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
