@@ -65,6 +65,9 @@ type SiteContentStateReadOptions = {
 
 const SITE_CONTENT_ROW_ID = 1;
 const SITE_ASSET_PUBLIC_SEGMENT = "/storage/v1/object/public/site-assets/";
+const SITE_CONTENT_CACHE_KEY = "stemise:site-content-cache";
+const SITE_CONTENT_STALE_TIME_MS = 60_000;
+const SITE_CONTENT_GC_TIME_MS = 10 * 60_000;
 const OPTIMIZABLE_IMAGE_TYPES = new Set(["image/jpeg", "image/png"]);
 const DEFAULT_MAX_UPLOAD_IMAGE_DIMENSION = 1800;
 const DEFAULT_MAX_UPLOAD_IMAGE_BYTES = 1.1 * 1024 * 1024;
@@ -75,6 +78,37 @@ const IMAGE_OPTIMIZATION_TIMEOUT_MS = 12_000;
 const STORAGE_UPLOAD_TIMEOUT_MS = 45_000;
 
 const cloneValue = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+const readCachedSiteContent = (): SiteContentMap | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(SITE_CONTENT_CACHE_KEY);
+    if (!rawValue) {
+      return null;
+    }
+
+    return normalizeSiteContentState(JSON.parse(rawValue) as Partial<Record<SiteContentKey, unknown>>);
+  } catch {
+    return null;
+  }
+};
+
+export const hasCachedSiteContent = () => Boolean(readCachedSiteContent());
+
+const persistCachedSiteContent = (payload: SiteContentMap) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(SITE_CONTENT_CACHE_KEY, JSON.stringify(payload));
+  } catch {
+    // Ignore storage write failures so content reads and saves still work.
+  }
+};
 
 const canonicalizeForComparison = (value: unknown): unknown => {
   if (Array.isArray(value)) {
@@ -472,8 +506,14 @@ export const siteContentLabels: Record<SiteContentKey, string> = {
   curriculum_pages: "Curriculum pages",
 };
 
-const getInitialSiteContentState = () =>
-  cloneValue(isSupabaseConfigured ? emptySiteContent : fallbackSiteContent);
+const getInitialSiteContentState = () => {
+  if (!isSupabaseConfigured) {
+    return cloneValue(fallbackSiteContent);
+  }
+
+  const cachedContent = readCachedSiteContent();
+  return cachedContent ? cloneValue(cachedContent) : cloneValue(emptySiteContent);
+};
 
 export const getFallbackSiteContent = <K extends SiteContentKey>(key: K): SiteContentMap[K] =>
   cloneValue((isSupabaseConfigured ? emptySiteContent : fallbackSiteContent)[key]);
@@ -546,8 +586,10 @@ export const fetchSiteContent = async <K extends SiteContentKey>(
   }
 
   const data = await fetchSiteContentStateRow({ throwOnError: true });
+  const normalizedState = normalizeSiteContentState(data.payload);
+  persistCachedSiteContent(normalizedState);
 
-  return normalizeSiteContent(key, data.payload?.[key]);
+  return normalizedState[key];
 };
 
 export const fetchAllSiteContent = async (): Promise<SiteContentMap> => {
@@ -556,8 +598,10 @@ export const fetchAllSiteContent = async (): Promise<SiteContentMap> => {
   }
 
   const data = await fetchSiteContentStateRow({ throwOnError: true });
+  const normalizedState = normalizeSiteContentState(data.payload);
+  persistCachedSiteContent(normalizedState);
 
-  return normalizeSiteContentState(data.payload);
+  return normalizedState;
 };
 
 const syncAllImageBackedContentToStorage = async (
@@ -603,6 +647,7 @@ export const saveAllSiteContent = async (payload: SiteContentMap): Promise<SiteC
     throw new Error("Content save could not be verified from Supabase.");
   }
 
+  persistCachedSiteContent(verifiedPayload);
   return verifiedPayload;
 };
 
@@ -648,6 +693,8 @@ export const saveSiteContent = async <K extends SiteContentKey>(
   ) {
     throw new Error("Content save could not be verified from Supabase.");
   }
+
+  persistCachedSiteContent(verifiedPayload);
 };
 
 export const uploadSiteAsset = async (file: File, folder: string): Promise<string> => {
@@ -685,22 +732,20 @@ export const uploadSiteAsset = async (file: File, folder: string): Promise<strin
   return data.publicUrl;
 };
 
-export const useSiteContentQuery = <K extends SiteContentKey>(key: K) =>
-  useQuery({
-    queryKey: ["site-content", key],
-    queryFn: () => fetchSiteContent(key),
-    initialData: getFallbackSiteContent(key),
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
-  });
-
-export const useAllSiteContentQuery = () =>
-  useQuery({
+export const useAllSiteContentQuery = <T = SiteContentMap>(
+  select?: (data: SiteContentMap) => T,
+) =>
+  useQuery<SiteContentMap, Error, T>({
     queryKey: ["site-content", "all"],
     queryFn: fetchAllSiteContent,
     initialData: getInitialSiteContentState(),
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    staleTime: SITE_CONTENT_STALE_TIME_MS,
+    gcTime: SITE_CONTENT_GC_TIME_MS,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+    select,
   });
+
+export const useSiteContentQuery = <K extends SiteContentKey>(key: K) =>
+  useAllSiteContentQuery((data) => data[key]);

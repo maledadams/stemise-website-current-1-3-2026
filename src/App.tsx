@@ -10,6 +10,7 @@ import PageTransition from "@/components/PageTransition";
 import ScrollEffects from "@/components/ScrollEffects";
 import { AdminAuthProvider } from "@/components/AdminAuthProvider";
 import EditModeToggle from "@/components/EditModeToggle";
+import SiteContentGate from "@/components/SiteContentGate";
 
 const Index = lazy(() => import("./pages/Index"));
 const About = lazy(() => import("./pages/About"));
@@ -34,28 +35,30 @@ const App = () => (
           <PageLoader />
           <ScrollToHash />
           <ScrollEffects />
-          <Suspense fallback={<div className="min-h-screen bg-background" />}>
-            <PageTransition>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/about" element={<About />} />
-                <Route path="/get-involved" element={<GetInvolved />} />
-                <Route path="/curriculum" element={<Courses />} />
-                <Route path="/curriculum/age/:ageGroup" element={<CurriculumAgeGroup />} />
-                <Route path="/curriculum/:slug" element={<CurriculumDetail />} />
-                <Route path="/kits" element={<Kits />} />
-                <Route path="/contact" element={<Contact />} />
-                <Route path="/admin" element={<Admin />} />
+          <SiteContentGate>
+            <Suspense fallback={<div className="min-h-screen bg-background" />}>
+              <PageTransition>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/about" element={<About />} />
+                  <Route path="/get-involved" element={<GetInvolved />} />
+                  <Route path="/curriculum" element={<Courses />} />
+                  <Route path="/curriculum/age/:ageGroup" element={<CurriculumAgeGroup />} />
+                  <Route path="/curriculum/:slug" element={<CurriculumDetail />} />
+                  <Route path="/kits" element={<Kits />} />
+                  <Route path="/contact" element={<Contact />} />
+                  <Route path="/admin" element={<Admin />} />
 
-                <Route path="/team" element={<Navigate to="/about" replace />} />
-                <Route path="/partners" element={<Navigate to="/get-involved" replace />} />
-                <Route path="/donations" element={<Navigate to="/get-involved" replace />} />
-                <Route path="/courses" element={<Navigate to="/curriculum" replace />} />
+                  <Route path="/team" element={<Navigate to="/about" replace />} />
+                  <Route path="/partners" element={<Navigate to="/get-involved" replace />} />
+                  <Route path="/donations" element={<Navigate to="/get-involved" replace />} />
+                  <Route path="/courses" element={<Navigate to="/curriculum" replace />} />
 
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </PageTransition>
-          </Suspense>
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </PageTransition>
+            </Suspense>
+          </SiteContentGate>
           <EditModeToggle />
         </AdminAuthProvider>
       </BrowserRouter>
